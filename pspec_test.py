@@ -39,14 +39,6 @@ ds.rephase_to_dset(0)
 ds.dsets[0].vis_units = 'mK'
 ds.dsets[1].vis_units = 'mK'
 
-"""NEED TO CHANGE"""
-baselines = [(24, 25), (37, 38), (38, 39)]
-
-# Power spectra object
-uvp = ds.pspec(baselines, baselines, (0, 1), [('xx', 'xx')], spw_ranges=[(600, 721)],
-               input_data_weight='identity',
-               norm='I', taper='blackman-harris', verbose=True)
-
 # fig, ax = plt.subplots(figsize=(12, 8))
 
 # spw = 1
@@ -67,36 +59,33 @@ thermal is can be averaged out and thus trivial.
 
 From each key get the corresponding local sidereal times as that will be used to plot with the mean attained from high
 delays. To get local sidereal times use the uvp.lst_avg_array method """
+baselines = uvd.get_antpairs()
+
+# Power spectra object
+uvp = ds.pspec(baselines, baselines, (0, 1), [('nn', 'nn')], spw_ranges=[(300, 400)], input_data_weight='identity',
+               norm='I', taper='blackman-harris', verbose=True)
 
 list_of_keys = uvp.get_all_keys()
 
 list_of_spw = []
 list_of_baselines = []
-list_of_avg_powers = []
+list_of_powers = []
 
 for key in list_of_keys:
     # Attains spectral window selection to each corresponding key
     list_of_spw.append(key[0])
     # Attains base line to each corresponding key
     list_of_baselines.append(key[1])
-    # Gets avg power value to respective key
-    power = np.abs(np.real(uvp.get_data(key)))
-    # We want to average high delays for each time and each key therefore will
-    # need to iterate through power variable which is a 2d array containing, time in the first
-    # index and delay values in the second
-    for delay_value in power:
-        list_of_avg_powers.append(np.mean(delay_value))
-
-# Want to reshape into a 3x3 as there are 3 averages that correspond to 3 times
-# may want to revisit as shape is hard coded
-# make it a double diminsion array n key x n time
-list_of_avg_powers = np.array(list_of_avg_powers).reshape(3, 3)
+    power = np.real(uvp.get_data(key))
+    list_of_powers.append(power)
 
 # Attains time indices and sidereal time with each corresponding key
 # only need to do it once because data from all baselines (keys) are recorded
 # at the same time. Therefore in principal sidereal times should all be the same
 time_index = uvp.key_to_indices(list_of_keys[0])[1]
 sidereal_time = uvp.lst_avg_array[time_index]
+length_of_keys = len(list_of_keys)
+length_of_sidereal_time = len(sidereal_time)
 
 # get the list of delays from corresponding spw values
 list_of_delays = []
@@ -114,19 +103,14 @@ for delays in list_of_delays:
     high_delays = np.squeeze(delays[high_delay_indices])
     high_delays_list.append(high_delays)
 
-# print(sidereal_time_list)
-# print(list_of_avg_powers)
-# print(len(sidereal_time_list))
-# print(len(list_of_avg_powers))
-# p1_big = ax.plot(high_delays, power_spectrum_high_delays.T)
-# ax.set_yscale('log')
-# ax.grid()
-# ax.set_xlabel("delay [ns]", fontsize=14)
-# ax.set_ylabel(r"$P(k)\ \rm [mK^2\ h^{-3}\ Mpc^3]$", fontsize=14)
-# ax.set_title("spw : {}, blpair : {}, pol : {}".format(*key), fontsize=14)
-#
+avg_power_array = np.zeros((length_of_keys, length_of_sidereal_time), dtype=object)
+
+for power in list_of_powers:
+    avg_power = np.mean(power[:, high_delay_indices], axis=1)
+    avg_power_array.fill(avg_power)
+
 fig, ax = plt.subplots(figsize=(12, 8))
-p1_big_mean = ax.plot(sidereal_time, list_of_avg_powers)
+p1_big_mean = ax.plot(sidereal_time, avg_power_array)
 # ax.set_yscale('log')
 ax.grid()
 ax.set_xlabel("Local Sidereal Time", fontsize=14)
